@@ -33,7 +33,9 @@ public record MethodDetailDto(
     List<MethodParameterDto> Parameters,
     List<MethodSummaryDto>   Callers,
     List<MethodSummaryDto>   Callees,
-    List<RenameHistoryDto>   RenameHistory
+    List<RenameHistoryDto>   RenameHistory,
+    string?                  PortedName,
+    string?                  PortedPath
 );
 
 public record MethodParameterDto(
@@ -47,5 +49,8 @@ public record MethodParameterDto(
 );
 
 public record UpdateStatusRequest(MigrationStatus Status, string? Comment);
+
+// Where a symbol was re-implemented in the target codebase (language-agnostic).
+public record SetPortRequest(string? PortedName, string? PortedPath);
 
 public record RenameRequest(string NewName, string? Comment = null);

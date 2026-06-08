@@ -82,8 +82,21 @@ public class MethodService(TrackerDbContext db) : IMethodService
             m.BodyStartLine, m.BodyStartColumn, m.BodyEndLine, m.BodyEndColumn,
             m.Parameters.Select(p => new MethodParameterDto(p.Id, p.CurrentName, p.OriginalName,
                 p.Type, p.Ordinal, p.StartLine, p.StartColumn, p.EndLine, p.EndColumn)).ToList(),
-            callers, callees, history
+            callers, callees, history,
+            m.PortedName, m.PortedPath
         );
+    }
+
+    public async Task<MethodSummaryDto?> SetPortAsync(int id, string? portedName, string? portedPath)
+    {
+        var m = await db.Methods.Include(m => m.File).FirstOrDefaultAsync(m => m.Id == id && m.RemovedAt == null);
+        if (m is null) return null;
+
+        m.PortedName = string.IsNullOrWhiteSpace(portedName) ? null : portedName.Trim();
+        m.PortedPath = string.IsNullOrWhiteSpace(portedPath) ? null : portedPath.Trim();
+        m.UpdatedAt  = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return ToSummary(m);
     }
 
     public async Task<MethodSummaryDto?> UpdateStatusAsync(int id, MigrationStatus status, string? comment)

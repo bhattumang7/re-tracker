@@ -19,6 +19,7 @@ export interface MethodDetailDto extends MethodSummaryDto {
   parameters: MethodParameterDto[];
   callers: MethodSummaryDto[]; callees: MethodSummaryDto[];
   renameHistory: RenameHistoryDto[];
+  portedName: string | null; portedPath: string | null;
 }
 
 export interface MethodParameterDto {
@@ -92,6 +93,10 @@ export class ApiService {
 
   updateStatus(id: number, req: UpdateStatusRequest): Observable<void> {
     return this.http.put<void>(`${this.base}/methods/${id}/status`, req);
+  }
+
+  setPort(id: number, req: { portedName?: string | null; portedPath?: string | null }): Observable<MethodSummaryDto> {
+    return this.http.put<MethodSummaryDto>(`${this.base}/methods/${id}/port`, req);
   }
 
   getMilestones(): Observable<MilestoneDto[]> {

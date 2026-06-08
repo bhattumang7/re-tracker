@@ -13,6 +13,10 @@ public class Method
     public MigrationStatus Status        { get; set; } = MigrationStatus.Pending;
     public string?         StatusComment { get; set; }
 
+    // Where this symbol was re-implemented in the target codebase (language-agnostic).
+    public string?         PortedName    { get; set; }
+    public string?         PortedPath    { get; set; }
+
     // Full declaration span (return type through closing paren)
     public int StartLine   { get; set; }
     public int StartColumn { get; set; }

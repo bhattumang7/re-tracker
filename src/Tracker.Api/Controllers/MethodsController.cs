@@ -40,6 +40,13 @@ public class MethodsController(IMethodService svc) : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    [HttpPut("{id:int}/port")]
+    public async Task<IActionResult> SetPort(int id, [FromBody] SetPortRequest req)
+    {
+        var result = await svc.SetPortAsync(id, req.PortedName, req.PortedPath);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     [HttpGet("{id:int}/callers")]
     public async Task<IActionResult> Callers(int id)
         => Ok(await svc.GetCallersAsync(id));

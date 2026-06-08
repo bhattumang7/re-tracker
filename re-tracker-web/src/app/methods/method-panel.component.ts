@@ -47,6 +47,22 @@ const STATUSES = ['Pending', 'InProgress', 'NeedsReview', 'Done', 'Skipped', 'De
         </div>
       </div>
 
+      <!-- Ported to: where this symbol was re-implemented in the target codebase -->
+      <div class="Box mb-4">
+        <div class="Box-header">Ported to</div>
+        <div class="Box-row d-flex gap-2" style="align-items:flex-end">
+          <input class="form-control" style="flex:1" placeholder="Target symbol name…" [(ngModel)]="portedName" />
+          <input class="form-control" style="flex:1" placeholder="Target file path…" [(ngModel)]="portedPath" />
+          <button class="btn btn-sm" (click)="savePort()">Save</button>
+        </div>
+        @if (m.portedName || m.portedPath) {
+          <div class="Box-row text-mono f6">
+            <span style="font-weight:500">{{ m.portedName }}</span>
+            <span class="text-muted ml-auto">{{ m.portedPath }}</span>
+          </div>
+        }
+      </div>
+
       <!-- Detail grid -->
       <div class="Box mb-4">
         <div class="Box-header">Details</div>
@@ -124,6 +140,8 @@ export class MethodPanelComponent implements OnInit {
   m: MethodDetailDto | null = null;
   newStatus = 'Pending';
   comment = '';
+  portedName = '';
+  portedPath = '';
   statuses = STATUSES;
   flash = signal('');
   flashClass = signal('flash flash-success');
@@ -135,9 +153,11 @@ export class MethodPanelComponent implements OnInit {
       const id = Number(params.get('id'));
       this.m = null;                       // show loading, clear stale content
       this.api.getMethod(id).subscribe(m => {
-        this.m         = m;
-        this.newStatus = m.status;
-        this.comment   = m.statusComment ?? '';
+        this.m          = m;
+        this.newStatus  = m.status;
+        this.comment    = m.statusComment ?? '';
+        this.portedName = m.portedName ?? '';
+        this.portedPath = m.portedPath ?? '';
       });
     });
   }
@@ -154,6 +174,23 @@ export class MethodPanelComponent implements OnInit {
       },
       error: () => {
         this.flash.set('Failed to save.');
+        this.flashClass.set('flash flash-error');
+      }
+    });
+  }
+
+  savePort() {
+    if (!this.m) return;
+    this.api.setPort(this.m.id, { portedName: this.portedName || null, portedPath: this.portedPath || null }).subscribe({
+      next: () => {
+        this.m!.portedName = this.portedName || null;
+        this.m!.portedPath = this.portedPath || null;
+        this.flash.set('Port mapping saved.');
+        this.flashClass.set('flash flash-success');
+        setTimeout(() => this.flash.set(''), 3000);
+      },
+      error: () => {
+        this.flash.set('Failed to save port mapping.');
         this.flashClass.set('flash flash-error');
       }
     });
