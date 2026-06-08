@@ -19,11 +19,14 @@ public class ScanService(
 
         var jobId = progress.Create();
 
+        // Capture connection string before the request scope ends and db is disposed.
+        var connectionString = db.Database.GetConnectionString()!;
+
         _ = Task.Run(async () =>
         {
             try
             {
-                await RunScanAsync(project, jobId);
+                await RunScanAsync(project, jobId, connectionString);
             }
             catch (Exception ex)
             {
@@ -36,7 +39,7 @@ public class ScanService(
 
     public ScanStatusDto? GetStatus(Guid jobId) => progress.Get(jobId);
 
-    private async Task RunScanAsync(Project project, Guid jobId)
+    private async Task RunScanAsync(Project project, Guid jobId, string connectionString)
     {
         var parser = parsers.FirstOrDefault(p => p.LanguageName == project.Language.Name)
             ?? throw new InvalidOperationException($"No parser for language '{project.Language.Name}'");
@@ -57,7 +60,7 @@ public class ScanService(
 
         // Use a fresh DbContext per scan to avoid concurrency issues with the request context
         var optionsBuilder = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<TrackerDbContext>();
-        optionsBuilder.UseSqlServer(db.Database.GetConnectionString());
+        optionsBuilder.UseSqlServer(connectionString);
 
         await using var scanDb = new TrackerDbContext(optionsBuilder.Options);
 
@@ -184,6 +187,17 @@ public class ScanService(
                 existing.BodyEndLine     = parsed.BodyEndLine;
                 existing.BodyEndColumn   = parsed.BodyEndColumn;
                 existing.UpdatedAt       = DateTime.UtcNow;
+
+                // Update parameter positions (matched by ordinal)
+                foreach (var pp in parsed.Parameters)
+                {
+                    var ep = existing.Parameters.FirstOrDefault(p => p.Ordinal == pp.Ordinal);
+                    if (ep is null) continue;
+                    ep.StartLine   = pp.StartLine;
+                    ep.StartColumn = pp.StartColumn;
+                    ep.EndLine     = pp.EndLine;
+                    ep.EndColumn   = pp.EndColumn;
+                }
             }
         }
 

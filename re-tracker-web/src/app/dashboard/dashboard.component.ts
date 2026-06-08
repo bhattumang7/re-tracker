@@ -14,27 +14,27 @@ import { ApiService, SummaryDto } from '../core/api.service';
     @if (s) {
       <div class="stat-grid">
         <div class="stat-card">
-          <div class="stat-num">{{ s.total }}</div>
+          <div class="stat-num">{{ s.totalMethods }}</div>
           <div class="stat-lbl">Total methods</div>
         </div>
         <div class="stat-card">
-          <div class="stat-num" style="color:var(--color-success-fg)">{{ s.done }}</div>
+          <div class="stat-num" style="color:var(--color-success-fg)">{{ s.byStatus['Done'] }}</div>
           <div class="stat-lbl">Done</div>
         </div>
         <div class="stat-card">
-          <div class="stat-num" style="color:var(--status-inprogress)">{{ s.inProgress }}</div>
+          <div class="stat-num" style="color:var(--status-inprogress)">{{ s.byStatus['InProgress'] }}</div>
           <div class="stat-lbl">In progress</div>
         </div>
         <div class="stat-card">
-          <div class="stat-num" style="color:var(--status-needsreview)">{{ s.needsReview }}</div>
+          <div class="stat-num" style="color:var(--status-needsreview)">{{ s.byStatus['NeedsReview'] }}</div>
           <div class="stat-lbl">Needs review</div>
         </div>
         <div class="stat-card">
-          <div class="stat-num" style="color:var(--color-fg-muted)">{{ s.pending }}</div>
+          <div class="stat-num" style="color:var(--color-fg-muted)">{{ s.byStatus['Pending'] }}</div>
           <div class="stat-lbl">Pending</div>
         </div>
         <div class="stat-card">
-          <div class="stat-num" style="color:var(--color-fg-subtle)">{{ s.skipped }}</div>
+          <div class="stat-num" style="color:var(--color-fg-subtle)">{{ s.byStatus['Skipped'] }}</div>
           <div class="stat-lbl">Skipped</div>
         </div>
       </div>
@@ -42,12 +42,12 @@ import { ApiService, SummaryDto } from '../core/api.service';
       <div class="Box mt-4">
         <div class="Box-header d-flex align-center gap-3">
           <span>Progress</span>
-          <span class="text-muted f6">{{ s.progressPct | number:'1.1-1' }}% complete</span>
-          <span class="ml-auto text-mono text-muted">{{ s.done }}/{{ s.total }}</span>
+          <span class="text-muted f6">{{ s.overallProgress | number:'1.1-1' }}% complete</span>
+          <span class="ml-auto text-mono text-muted">{{ s.byStatus['Done'] }}/{{ s.totalMethods }}</span>
         </div>
         <div style="padding: 16px;">
           <div class="progress-bar-outer">
-            <div class="progress-bar-inner" [style.width.%]="s.progressPct"></div>
+            <div class="progress-bar-inner" [style.width.%]="s.overallProgress"></div>
           </div>
         </div>
       </div>

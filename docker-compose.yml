@@ -28,6 +28,8 @@ services:
       ConnectionStrings__ReTracker: "Server=sqlserver,1433;Database=ReTracker;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;"
     ports:
       - "5000:8080"
+    volumes:
+      - C:\projects\vba6_src:/sources/vba6_src:ro
     depends_on:
       sqlserver:
         condition: service_healthy

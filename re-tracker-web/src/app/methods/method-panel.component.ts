@@ -99,10 +99,10 @@ const STATUSES = ['Pending', 'InProgress', 'NeedsReview', 'Done', 'Skipped', 'De
       }
 
       <!-- Rename history -->
-      @if (m.renameHistories.length) {
+      @if (m.renameHistory.length) {
         <div class="Box mb-4">
           <div class="Box-header">Rename history</div>
-          @for (h of m.renameHistories; track h.id) {
+          @for (h of m.renameHistory; track h.id) {
             <div class="Box-row">
               <span class="text-muted f6" style="width:140px;flex-shrink:0">{{ h.timestamp | date:'short' }}</span>
               <span class="text-mono">{{ h.oldName }}</span>

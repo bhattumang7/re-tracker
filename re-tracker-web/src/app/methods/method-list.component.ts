@@ -83,7 +83,7 @@ export class MethodListComponent implements OnInit {
     const params: Record<string, any> = { page: this.page + 1, pageSize: this.pageSize };
     if (this.filterStatus) params['status'] = this.filterStatus;
     if (this.filterName)   params['nameContains'] = this.filterName;
-    this.api.getMethods(params).subscribe(r => { this.methods = r.items; this.total = r.total; });
+    this.api.getMethods(params).subscribe(r => { this.methods = r.items; this.total = r.totalCount; });
   }
 
   prev() { this.page--; this.load(); }

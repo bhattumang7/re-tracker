@@ -3,9 +3,10 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 export interface SummaryDto {
-  total: number; pending: number; inProgress: number;
-  needsReview: number; done: number; skipped: number; deferred: number;
-  progressPct: number;
+  totalMethods: number; totalFiles: number; totalClasses: number; totalMilestones: number;
+  byStatus: Record<string, number>;
+  overallProgress: number;
+  milestoneProgress: { id: number; name: string; total: number; done: number; progress: number }[];
 }
 
 export interface MethodSummaryDto {
@@ -17,7 +18,7 @@ export interface MethodDetailDto extends MethodSummaryDto {
   statusComment: string | null; startColumn: number; endLine: number; endColumn: number;
   parameters: MethodParameterDto[];
   callers: MethodSummaryDto[]; callees: MethodSummaryDto[];
-  renameHistories: RenameHistoryDto[];
+  renameHistory: RenameHistoryDto[];
 }
 
 export interface MethodParameterDto {
@@ -54,7 +55,7 @@ export interface SearchResultItem {
   status: string | null; startLine: number | null;
 }
 
-export interface PagedResult<T> { items: T[]; total: number; page: number; pageSize: number; }
+export interface PagedResult<T> { items: T[]; totalCount: number; page: number; pageSize: number; }
 
 export interface RenameHistoryDto {
   id: number; entityType: string; oldName: string; newName: string;
