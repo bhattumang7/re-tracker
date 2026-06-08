@@ -102,6 +102,11 @@ export class ApiService {
     return this.http.get<MethodSummaryDto>(`${this.base}/milestones/${id}/next`);
   }
 
+  getMilestoneMethods(id: number, pageSize = 1000): Observable<PagedResult<MethodSummaryDto>> {
+    const hp = new HttpParams().set('pageSize', String(pageSize));
+    return this.http.get<PagedResult<MethodSummaryDto>>(`${this.base}/milestones/${id}/methods`, { params: hp });
+  }
+
   getMilestoneGraph(id: number): Observable<GraphDto> {
     return this.http.get<GraphDto>(`${this.base}/milestones/${id}/graph`);
   }

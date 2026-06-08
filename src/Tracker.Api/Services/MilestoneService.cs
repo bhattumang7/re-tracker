@@ -54,10 +54,11 @@ public class MilestoneService(TrackerDbContext db) : IMilestoneService
 
     public async Task<PagedResult<MethodSummaryDto>> GetMethodsAsync(int id, MigrationStatus? status, int page, int pageSize)
     {
+        // No .Include here: File is projected explicitly below (EF emits the JOIN).
+        // Include after a Select projection is invalid and 500s at runtime.
         var q = db.MilestoneMethods
             .Where(mm => mm.MilestoneId == id && mm.Method.RemovedAt == null)
             .Select(mm => mm.Method)
-            .Include(m => m.File)
             .AsQueryable();
 
         if (status.HasValue) q = q.Where(m => m.Status == status.Value);

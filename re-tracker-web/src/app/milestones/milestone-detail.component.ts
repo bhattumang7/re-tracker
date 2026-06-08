@@ -61,7 +61,9 @@ export class MilestoneDetailComponent implements OnInit {
   ngOnInit() {
     const id = Number(this.route.snapshot.paramMap.get('id'));
     this.api.getMilestone(id).subscribe(m => this.milestone = m);
-    this.api.getMethods({ milestoneId: id, pageSize: 200 }).subscribe(r => this.methods = r.items);
+    // Use the milestone-scoped endpoint (/api/methods has no milestoneId filter,
+    // so it would return the whole project's first page, not this milestone).
+    this.api.getMilestoneMethods(id).subscribe(r => this.methods = r.items);
   }
 
   loadNext() {
