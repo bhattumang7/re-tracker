@@ -37,17 +37,38 @@ public class CLanguageParser : ILanguageParser
 
             var expectedName = markerMatch.Groups[1].Value;
 
-            // First non-blank line after the marker is the signature
+            // First non-blank, non-comment line after the marker is the signature.
+            // Ghidra emits /* WARNING: ... */ blocks between the marker and signature.
             int sigIdx = i + 1;
-            while (sigIdx < lines.Length && string.IsNullOrWhiteSpace(lines[sigIdx]))
-                sigIdx++;
+            while (sigIdx < lines.Length)
+            {
+                var trim = lines[sigIdx].TrimStart();
+                if (string.IsNullOrWhiteSpace(trim))        { sigIdx++; continue; }
+                if (trim.StartsWith("/*"))
+                {
+                    while (sigIdx < lines.Length && !lines[sigIdx].Contains("*/")) sigIdx++;
+                    sigIdx++;
+                    continue;
+                }
+                if (trim.StartsWith("//"))                  { sigIdx++; continue; }
+                break;
+            }
 
             if (sigIdx >= lines.Length) break;
 
-            var sigText = lines[sigIdx].TrimEnd();
+            // Ghidra occasionally wraps long parameter lists onto the next line.
+            // Collect lines until we see the closing ')'.
+            var sigBuilder = new System.Text.StringBuilder(lines[sigIdx].TrimEnd());
+            for (int k = sigIdx + 1; !sigBuilder.ToString().Contains(')') && k < lines.Length; k++)
+            {
+                var nl = lines[k].Trim();
+                if (string.IsNullOrEmpty(nl) || MarkerRx.IsMatch(nl)) break;
+                sigBuilder.Append(' ').Append(nl);
+            }
+            var sigText  = sigBuilder.ToString();
             var sigMatch = SignatureRx.Match(sigText);
 
-            if (!sigMatch.Success || sigMatch.Groups[2].Value != expectedName)
+            if (!sigMatch.Success)
             {
                 i = sigIdx;
                 continue;

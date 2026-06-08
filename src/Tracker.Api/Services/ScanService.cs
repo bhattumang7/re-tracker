@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Tracker.Api.Services.Interfaces;
 using Tracker.Core.DTOs;
 using Tracker.Core.Interfaces;
@@ -10,7 +11,8 @@ namespace Tracker.Api.Services;
 public class ScanService(
     TrackerDbContext db,
     IEnumerable<ILanguageParser> parsers,
-    ScanProgressStore progress) : IScanService
+    ScanProgressStore progress,
+    ILogger<ScanService> logger) : IScanService
 {
     public async Task<ScanJobDto> TriggerScanAsync(int projectId)
     {
@@ -30,7 +32,11 @@ public class ScanService(
             }
             catch (Exception ex)
             {
-                progress.Update(jobId, 0, 0, true, ex.Message);
+                var msg = ex.InnerException is not null
+                    ? $"{ex.Message} → {ex.InnerException.Message}"
+                    : ex.Message;
+                logger.LogError(ex, "Scan job {JobId} failed", jobId);
+                progress.Update(jobId, 0, 0, true, msg);
             }
         });
 
@@ -82,7 +88,7 @@ public class ScanService(
         progress.Update(jobId, files.Count, files.Count, true);
     }
 
-    private static async Task ReconcileFileAsync(
+    private async Task ReconcileFileAsync(
         TrackerDbContext scanDb, int projectId, string relativePath, Core.Models.ParseResult parseResult)
     {
         var trackedFile = await scanDb.Files
@@ -114,6 +120,25 @@ public class ScanService(
         foreach (var parsed in parseResult.Methods)
         {
             var existing = MethodMatcher.FindMatch(existingMethods, parsed, matchedIds);
+
+            if (existing is null)
+            {
+                // Fallback: MethodMatcher can miss an existing method when line numbers
+                // have shifted past the proximity tolerance. Query the DB directly by
+                // OriginalName before inserting, to avoid a duplicate key violation.
+                existing = await scanDb.Methods
+                    .FirstOrDefaultAsync(m => m.FileId == trackedFile.Id
+                                          && m.OriginalName == parsed.Name
+                                          && m.RemovedAt == null);
+
+                if (existing is not null)
+                {
+                    logger.LogInformation(
+                        "DB fallback matched existing method {MethodId} ({Name}) — not in MethodMatcher pool.",
+                        existing.Id, parsed.Name);
+                    matchedIds.Add(existing.Id);
+                }
+            }
 
             if (existing is null)
             {
