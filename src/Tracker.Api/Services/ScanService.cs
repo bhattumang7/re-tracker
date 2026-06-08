@@ -233,4 +233,74 @@ public class ScanService(
         await scanDb.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Bulk-import caller→callee edges (harvested externally, e.g. from clangd's
+    /// call hierarchy) as this project's internal call graph. Edges reference
+    /// functions by name (current or original); unknown names are skipped.
+    /// Existing edges for the project are replaced, so the import is idempotent.
+    /// </summary>
+    public async Task<CallGraphImportResult> ImportCallGraphAsync(int projectId, CallGraphImportRequest request)
+    {
+        var fileIds = await db.Files
+            .Where(f => f.ProjectId == projectId && f.RemovedAt == null)
+            .Select(f => f.Id)
+            .ToListAsync();
+        var fileIdSet = fileIds.ToHashSet();
+
+        var methods = await db.Methods
+            .Where(m => m.RemovedAt == null && fileIdSet.Contains(m.FileId))
+            .Select(m => new { m.Id, m.CurrentName, m.OriginalName })
+            .ToListAsync();
+
+        // Resolve a function name → method id. Prefer the current (readable) name,
+        // but also accept the original FUN_ name so either spelling resolves.
+        var nameToId = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var m in methods) nameToId[m.CurrentName] = m.Id;
+        foreach (var m in methods) nameToId.TryAdd(m.OriginalName, m.Id);
+
+        var projMethodIds = methods.Select(m => m.Id).ToHashSet();
+
+        // Replace any existing edges originating from this project's methods.
+        await db.MethodCalls
+            .Where(c => projMethodIds.Contains(c.CallerMethodId))
+            .ExecuteDeleteAsync();
+
+        int unresolved = 0, selfOrDup = 0;
+        var seen = new HashSet<(int Caller, int Callee)>();
+        var rows = new List<MethodCall>();
+
+        foreach (var e in request.Edges)
+        {
+            if (!nameToId.TryGetValue(e.Caller, out var callerId) ||
+                !nameToId.TryGetValue(e.Callee, out var calleeId))
+            {
+                unresolved++;                       // external / unknown symbol
+                continue;
+            }
+            if (callerId == calleeId || !seen.Add((callerId, calleeId)))
+            {
+                selfOrDup++;                        // ignore recursion + duplicate edges
+                continue;
+            }
+            rows.Add(new MethodCall
+            {
+                CallerMethodId = callerId,
+                CalleeMethodId = calleeId,
+                RawCalleeName  = e.Callee,
+                CallLine       = 0,
+                CallColumn     = 0
+            });
+        }
+
+        db.MethodCalls.AddRange(rows);
+        await db.SaveChangesAsync();
+
+        logger.LogInformation(
+            "Call-graph import for project {ProjectId}: {Received} received, {Inserted} inserted, "
+            + "{Unresolved} unresolved, {SelfOrDup} self/duplicate.",
+            projectId, request.Edges.Count, rows.Count, unresolved, selfOrDup);
+
+        return new CallGraphImportResult(request.Edges.Count, rows.Count, unresolved, selfOrDup);
+    }
+
 }

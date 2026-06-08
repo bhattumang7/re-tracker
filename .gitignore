@@ -9,3 +9,6 @@ dist/
 .angular/
 *.db-shm
 *.db-wal
+
+# Harvested call-graph edges (generated)
+tools/edges.json

@@ -61,6 +61,12 @@ public class MilestonesController(IMilestoneService svc) : ControllerBase
         await svc.AddMethodAsync(id, methodId);
         return Ok();
     }
+
+    // Define the milestone as a top-level function's dependency subtree
+    // (its transitive callees), so /next walks that subtree leaf-first.
+    [HttpPost("{id:int}/scope/{rootMethodId:int}")]
+    public async Task<IActionResult> ScopeToRoot(int id, int rootMethodId)
+        => Ok(new { milestoneId = id, rootMethodId, members = await svc.ScopeToRootAsync(id, rootMethodId) });
 }
 
 public record CreateMilestoneRequest(string Name, string? Description, int ProjectId, int? ParentId, int SortOrder = 0);

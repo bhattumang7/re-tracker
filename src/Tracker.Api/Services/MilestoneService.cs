@@ -153,6 +153,57 @@ public class MilestoneService(TrackerDbContext db) : IMilestoneService
         return true;
     }
 
+    /// <summary>
+    /// Define a milestone as a single top-level function's dependency subtree:
+    /// walk callee edges breadth-first from the root and make exactly those
+    /// functions the milestone's members (replacing any existing membership).
+    /// Combined with GetNextAsync, this gives the "pick a top-level function,
+    /// walk it depth-first (leaf-first)" workflow.
+    /// </summary>
+    public async Task<int> ScopeToRootAsync(int milestoneId, int rootMethodId)
+    {
+        // Adjacency: caller -> internal callees.
+        var edges = await db.MethodCalls
+            .Where(c => c.CalleeMethodId != null)
+            .Select(c => new { c.CallerMethodId, Callee = c.CalleeMethodId!.Value })
+            .ToListAsync();
+
+        var adj = new Dictionary<int, List<int>>();
+        foreach (var e in edges)
+        {
+            if (!adj.TryGetValue(e.CallerMethodId, out var list))
+                adj[e.CallerMethodId] = list = new List<int>();
+            list.Add(e.Callee);
+        }
+
+        // BFS over callees from the root.
+        var reachable = new HashSet<int> { rootMethodId };
+        var queue = new Queue<int>();
+        queue.Enqueue(rootMethodId);
+        while (queue.Count > 0)
+        {
+            var n = queue.Dequeue();
+            if (!adj.TryGetValue(n, out var callees)) continue;
+            foreach (var c in callees)
+                if (reachable.Add(c)) queue.Enqueue(c);
+        }
+
+        var memberIds = await db.Methods
+            .Where(m => m.RemovedAt == null && reachable.Contains(m.Id))
+            .Select(m => m.Id)
+            .ToListAsync();
+
+        await db.MilestoneMethods.Where(mm => mm.MilestoneId == milestoneId).ExecuteDeleteAsync();
+        db.MilestoneMethods.AddRange(memberIds.Select(id => new MilestoneMethod
+        {
+            MilestoneId = milestoneId,
+            MethodId    = id,
+            AddedAt     = DateTime.UtcNow
+        }));
+        await db.SaveChangesAsync();
+        return memberIds.Count;
+    }
+
     // --- helpers ---
 
     private static List<MilestoneTreeDto> BuildTree(List<Milestone> all, int? parentId)

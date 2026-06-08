@@ -6,4 +6,5 @@ public interface IScanService
 {
     Task<ScanJobDto> TriggerScanAsync(int projectId);
     ScanStatusDto? GetStatus(Guid jobId);
+    Task<CallGraphImportResult> ImportCallGraphAsync(int projectId, CallGraphImportRequest request);
 }

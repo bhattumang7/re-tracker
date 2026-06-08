@@ -45,18 +45,25 @@ public class MethodService(TrackerDbContext db) : IMethodService
 
         if (m is null) return null;
 
+        // Project explicitly through the navigation so EF emits a SQL JOIN for
+        // File.RelativePath. (A projection through ToSummary drops the Include,
+        // leaving File null — hence the NRE once call edges exist.)
         var callers = await db.MethodCalls
             .Where(c => c.CalleeMethodId == id)
-            .Include(c => c.CallerMethod.File)
-            .Select(c => ToSummary(c.CallerMethod))
+            .Select(c => c.CallerMethod)
             .Distinct()
+            .Select(m => new MethodSummaryDto(
+                m.Id, m.CurrentName, m.OriginalName, m.ReturnType, m.Status, m.StatusComment,
+                m.FileId, m.File.RelativePath, m.StartLine, m.StartColumn))
             .ToListAsync();
 
         var callees = await db.MethodCalls
             .Where(c => c.CallerMethodId == id && c.CalleeMethodId != null)
-            .Include(c => c.CalleeMethod!.File)
-            .Select(c => ToSummary(c.CalleeMethod!))
+            .Select(c => c.CalleeMethod!)
             .Distinct()
+            .Select(m => new MethodSummaryDto(
+                m.Id, m.CurrentName, m.OriginalName, m.ReturnType, m.Status, m.StatusComment,
+                m.FileId, m.File.RelativePath, m.StartLine, m.StartColumn))
             .ToListAsync();
 
         var history = await db.RenameHistories
@@ -119,17 +126,21 @@ public class MethodService(TrackerDbContext db) : IMethodService
     public async Task<List<MethodSummaryDto>> GetCallersAsync(int id)
         => await db.MethodCalls
             .Where(c => c.CalleeMethodId == id)
-            .Include(c => c.CallerMethod.File)
-            .Select(c => ToSummary(c.CallerMethod))
+            .Select(c => c.CallerMethod)
             .Distinct()
+            .Select(m => new MethodSummaryDto(
+                m.Id, m.CurrentName, m.OriginalName, m.ReturnType, m.Status, m.StatusComment,
+                m.FileId, m.File.RelativePath, m.StartLine, m.StartColumn))
             .ToListAsync();
 
     public async Task<List<MethodSummaryDto>> GetCalleesAsync(int id)
         => await db.MethodCalls
             .Where(c => c.CallerMethodId == id && c.CalleeMethodId != null)
-            .Include(c => c.CalleeMethod!.File)
-            .Select(c => ToSummary(c.CalleeMethod!))
+            .Select(c => c.CalleeMethod!)
             .Distinct()
+            .Select(m => new MethodSummaryDto(
+                m.Id, m.CurrentName, m.OriginalName, m.ReturnType, m.Status, m.StatusComment,
+                m.FileId, m.File.RelativePath, m.StartLine, m.StartColumn))
             .ToListAsync();
 
     private static MethodSummaryDto ToSummary(Method m) => new(

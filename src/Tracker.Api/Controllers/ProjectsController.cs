@@ -39,4 +39,10 @@ public class ProjectsController(IProjectService projects, IScanService scan) : C
         var status = scan.GetStatus(jobId);
         return status is null ? NotFound() : Ok(status);
     }
+
+    // Bulk-import caller→callee edges (e.g. harvested from clangd) and persist them
+    // as the internal call graph for this project. Replaces existing edges.
+    [HttpPost("{id:int}/callgraph")]
+    public async Task<IActionResult> ImportCallGraph(int id, [FromBody] CallGraphImportRequest req)
+        => Ok(await scan.ImportCallGraphAsync(id, req));
 }

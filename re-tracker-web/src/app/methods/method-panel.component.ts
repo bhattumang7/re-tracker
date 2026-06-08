@@ -129,11 +129,16 @@ export class MethodPanelComponent implements OnInit {
   flashClass = signal('flash flash-success');
 
   ngOnInit() {
-    const id = Number(this.route.snapshot.paramMap.get('id'));
-    this.api.getMethod(id).subscribe(m => {
-      this.m         = m;
-      this.newStatus = m.status;
-      this.comment   = m.statusComment ?? '';
+    // Subscribe to paramMap (not snapshot): Angular reuses this component when
+    // navigating method→method, so ngOnInit runs once but the id keeps changing.
+    this.route.paramMap.subscribe(params => {
+      const id = Number(params.get('id'));
+      this.m = null;                       // show loading, clear stale content
+      this.api.getMethod(id).subscribe(m => {
+        this.m         = m;
+        this.newStatus = m.status;
+        this.comment   = m.statusComment ?? '';
+      });
     });
   }
 
