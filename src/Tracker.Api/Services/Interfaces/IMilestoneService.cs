@@ -15,4 +15,5 @@ public interface IMilestoneService
     Task<MilestoneDto> CreateAsync(string name, string? description, int projectId, int? parentId, int sortOrder);
     Task<bool> AddMethodAsync(int milestoneId, int methodId);
     Task<int> ScopeToRootAsync(int milestoneId, int rootMethodId);
+    Task<List<CallTreeNodeDto>> GetCallTreeAsync(int milestoneId);
 }

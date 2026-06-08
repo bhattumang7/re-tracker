@@ -48,6 +48,10 @@ public class MilestonesController(IMilestoneService svc) : ControllerBase
     public async Task<IActionResult> Graph(int id)
         => Ok(await svc.GetGraphAsync(id));
 
+    [HttpGet("{id:int}/calltree")]
+    public async Task<IActionResult> CallTree(int id)
+        => Ok(await svc.GetCallTreeAsync(id));
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateMilestoneRequest req)
     {

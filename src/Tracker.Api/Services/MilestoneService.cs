@@ -205,6 +205,87 @@ public class MilestoneService(TrackerDbContext db) : IMilestoneService
         return memberIds.Count;
     }
 
+    /// <summary>
+    /// Build the milestone's call tree: starting from its roots (members not
+    /// called by any other member), expand callees recursively. A function
+    /// appears once per calling path (duplicates across branches are intended).
+    /// A node that is its own ancestor is flagged Cyclic and not expanded, and a
+    /// global node cap prevents pathological blow-up on large/dense milestones.
+    /// </summary>
+    public async Task<List<CallTreeNodeDto>> GetCallTreeAsync(int milestoneId)
+    {
+        var members = await db.MilestoneMethods
+            .Where(mm => mm.MilestoneId == milestoneId && mm.Method.RemovedAt == null)
+            .Select(mm => new
+            {
+                mm.Method.Id,
+                Name      = mm.Method.CurrentName,
+                mm.Method.Status,
+                FilePath  = mm.Method.File.RelativePath,
+                mm.Method.StartLine
+            })
+            .ToListAsync();
+
+        if (members.Count == 0) return new List<CallTreeNodeDto>();
+
+        var info      = members.ToDictionary(m => m.Id);
+        var memberIds = info.Keys.ToHashSet();
+
+        var edges = await db.MethodCalls
+            .Where(c => c.CalleeMethodId != null
+                && memberIds.Contains(c.CallerMethodId)
+                && memberIds.Contains(c.CalleeMethodId.Value))
+            .Select(c => new { c.CallerMethodId, Callee = c.CalleeMethodId!.Value })
+            .Distinct()
+            .ToListAsync();
+
+        var adj = new Dictionary<int, List<int>>();
+        var calledByMember = new HashSet<int>();
+        foreach (var e in edges)
+        {
+            if (!adj.TryGetValue(e.CallerMethodId, out var list))
+                adj[e.CallerMethodId] = list = new List<int>();
+            list.Add(e.Callee);
+            calledByMember.Add(e.Callee);
+        }
+        foreach (var list in adj.Values)
+            list.Sort((a, b) => string.Compare(info[a].Name, info[b].Name, StringComparison.Ordinal));
+
+        // Roots: members nothing else in the milestone calls (in-degree 0).
+        var roots = members
+            .Where(m => !calledByMember.Contains(m.Id))
+            .OrderBy(m => m.Name, StringComparer.Ordinal)
+            .Select(m => m.Id)
+            .ToList();
+        // Fully cyclic membership has no in-degree-0 node — fall back to lowest id.
+        if (roots.Count == 0)
+            roots = members.OrderBy(m => m.Id).Select(m => m.Id).Take(1).ToList();
+
+        const int maxNodes = 5000;
+        int produced = 0;
+
+        CallTreeNodeDto Build(int id, HashSet<int> ancestors)
+        {
+            var m = info[id];
+            produced++;
+            bool cyclic = ancestors.Contains(id);
+            var children = new List<CallTreeNodeDto>();
+            if (!cyclic && produced < maxNodes && adj.TryGetValue(id, out var callees))
+            {
+                ancestors.Add(id);
+                foreach (var c in callees)
+                {
+                    if (produced >= maxNodes) break;
+                    children.Add(Build(c, ancestors));
+                }
+                ancestors.Remove(id);
+            }
+            return new CallTreeNodeDto(id, m.Name, m.Status, m.FilePath, m.StartLine, cyclic, children);
+        }
+
+        return roots.Select(r => Build(r, new HashSet<int>())).ToList();
+    }
+
     // --- helpers ---
 
     private static List<MilestoneTreeDto> BuildTree(List<Milestone> all, int? parentId)
@@ -236,6 +317,9 @@ public class MilestoneService(TrackerDbContext db) : IMilestoneService
         int total  = active.Count;
         int done   = active.Count(mm => mm.Method?.Status == MigrationStatus.Done);
         double pct = total > 0 ? Math.Round((double)done / total * 100, 1) : 0;
-        return new MilestoneDto(m.Id, m.ParentId, m.Name, m.Description, m.SortOrder, total, done, pct);
+        var byStatus = active
+            .GroupBy(mm => mm.Method!.Status.ToString())
+            .ToDictionary(g => g.Key, g => g.Count());
+        return new MilestoneDto(m.Id, m.ParentId, m.Name, m.Description, m.SortOrder, total, done, pct, byStatus);
     }
 }

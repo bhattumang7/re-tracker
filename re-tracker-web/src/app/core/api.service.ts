@@ -31,6 +31,14 @@ export interface UpdateStatusRequest { status: string; comment?: string; }
 export interface MilestoneDto {
   id: number; name: string; description: string | null; projectId: number;
   parentId: number | null; sortOrder: number;
+  totalMethods: number; doneMethods: number; progress: number;
+  byStatus?: Record<string, number>;
+}
+
+export interface CallTreeNodeDto {
+  id: number; currentName: string; status: string;
+  filePath: string; startLine: number; cyclic: boolean;
+  children: CallTreeNodeDto[];
 }
 
 export interface MilestoneTreeDto extends MilestoneDto {
@@ -109,6 +117,10 @@ export class ApiService {
 
   getMilestoneGraph(id: number): Observable<GraphDto> {
     return this.http.get<GraphDto>(`${this.base}/milestones/${id}/graph`);
+  }
+
+  getMilestoneCallTree(id: number): Observable<CallTreeNodeDto[]> {
+    return this.http.get<CallTreeNodeDto[]>(`${this.base}/milestones/${id}/calltree`);
   }
 
   getFiles(projectId?: number): Observable<FileDto[]> {

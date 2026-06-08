@@ -1,7 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, MilestoneDto, MethodSummaryDto } from '../core/api.service';
+import { ApiService, MilestoneDto, MethodSummaryDto, CallTreeNodeDto } from '../core/api.service';
 import { StatusBadgeComponent } from '../shared/status-badge.component';
 
 @Component({
@@ -23,12 +23,25 @@ import { StatusBadgeComponent } from '../shared/status-badge.component';
       <div class="text-muted f5 mb-2">{{ milestone!.description }}</div>
     }
 
+    <!-- Scope / progress -->
+    @if (milestone) {
+      <div class="Box mb-4">
+        <div class="Box-row d-flex gap-3" style="flex-wrap:wrap; align-items:center">
+          <span><strong class="f4">{{ milestone.totalMethods }}</strong> <span class="text-muted">functions</span></span>
+          <span><strong class="f4">{{ milestone.doneMethods }}</strong> <span class="text-muted">done</span></span>
+          <span><strong class="f4">{{ milestone.progress }}%</strong> <span class="text-muted">complete</span></span>
+          <span class="d-flex gap-2 ml-auto" style="flex-wrap:wrap">
+            @for (s of statusEntries; track s[0]) {
+              <span class="Label">{{ s[0] }}: {{ s[1] }}</span>
+            }
+          </span>
+        </div>
+      </div>
+    }
+
     @if (next) {
       <div class="Box mb-4" style="border-color: var(--color-accent-emphasis)">
         <div class="Box-row">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="var(--color-accent-fg)">
-            <path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/>
-          </svg>
           <span class="text-muted f6">Next recommended</span>
           <a [routerLink]="['/methods', next.id]" class="text-mono">{{ next.currentName }}</a>
           <app-status-badge [status]="next.status" />
@@ -36,7 +49,8 @@ import { StatusBadgeComponent } from '../shared/status-badge.component';
       </div>
     }
 
-    <div class="Box">
+    <!-- Flat list -->
+    <div class="Box mb-4">
       <div class="Box-header">Methods <span class="Counter">{{ methods.length }}</span></div>
       @for (m of methods; track m.id) {
         <div class="Box-row">
@@ -48,6 +62,34 @@ import { StatusBadgeComponent } from '../shared/status-badge.component';
         <div class="Box-row text-muted">No methods in this milestone.</div>
       }
     </div>
+
+    <!-- Call tree (root → callees; a function repeats under each caller; ↻ = recursion cut) -->
+    <div class="Box">
+      <div class="Box-header">Call tree <span class="Counter">{{ treeNodeCount }}</span></div>
+      @if (tree.length) {
+        @for (root of tree; track $index) {
+          <ng-container *ngTemplateOutlet="treeNode; context: { $implicit: root, depth: 0 }"></ng-container>
+        }
+      } @else {
+        <div class="Box-row text-muted">No call tree.</div>
+      }
+    </div>
+
+    <ng-template #treeNode let-node let-depth="depth">
+      <div class="Box-row">
+        <span class="d-flex align-center gap-2" style="width:100%" [style.padding-left.px]="depth * 18">
+          <app-status-badge [status]="node.status" />
+          <a [routerLink]="['/methods', node.id]" class="text-mono">{{ node.currentName }}</a>
+          @if (node.cyclic) {
+            <span class="text-muted f6" title="recursion — this function is its own ancestor; not expanded again">↻</span>
+          }
+          <span class="text-muted f6 ml-auto text-mono">{{ node.filePath }}:{{ node.startLine }}</span>
+        </span>
+      </div>
+      @for (c of node.children; track $index) {
+        <ng-container *ngTemplateOutlet="treeNode; context: { $implicit: c, depth: depth + 1 }"></ng-container>
+      }
+    </ng-template>
   `
 })
 export class MilestoneDetailComponent implements OnInit {
@@ -56,14 +98,25 @@ export class MilestoneDetailComponent implements OnInit {
 
   milestone: MilestoneDto | null = null;
   methods: MethodSummaryDto[] = [];
+  tree: CallTreeNodeDto[] = [];
   next: MethodSummaryDto | null = null;
+
+  get statusEntries(): [string, number][] {
+    return Object.entries(this.milestone?.byStatus ?? {});
+  }
+
+  get treeNodeCount(): number {
+    const count = (n: CallTreeNodeDto): number =>
+      1 + n.children.reduce((sum, c) => sum + count(c), 0);
+    return this.tree.reduce((sum, r) => sum + count(r), 0);
+  }
 
   ngOnInit() {
     const id = Number(this.route.snapshot.paramMap.get('id'));
     this.api.getMilestone(id).subscribe(m => this.milestone = m);
-    // Use the milestone-scoped endpoint (/api/methods has no milestoneId filter,
-    // so it would return the whole project's first page, not this milestone).
+    // Milestone-scoped endpoint (/api/methods has no milestoneId filter).
     this.api.getMilestoneMethods(id).subscribe(r => this.methods = r.items);
+    this.api.getMilestoneCallTree(id).subscribe(t => this.tree = t);
   }
 
   loadNext() {
