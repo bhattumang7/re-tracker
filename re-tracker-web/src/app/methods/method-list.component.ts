@@ -1,7 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { ApiService, MethodSummaryDto } from '../core/api.service';
 import { StatusBadgeComponent } from '../shared/status-badge.component';
 
@@ -21,15 +21,15 @@ const STATUSES = ['', 'Pending', 'InProgress', 'NeedsReview', 'Done', 'Skipped',
     <div class="d-flex gap-2 mb-4">
       <input class="form-control" style="max-width:260px"
              placeholder="Filter by name…"
-             [(ngModel)]="filterName" (keydown.enter)="load()" />
+             [(ngModel)]="filterName" (keydown.enter)="apply()" />
       <select class="form-control" style="max-width:160px"
-              [(ngModel)]="filterStatus" (change)="load()">
+              [(ngModel)]="filterStatus" (change)="apply()">
         <option value="">All statuses</option>
         @for (s of statuses; track s) {
           <option [value]="s">{{ s }}</option>
         }
       </select>
-      <button class="btn btn-sm" (click)="load()">Apply</button>
+      <button class="btn btn-sm" (click)="apply()">Apply</button>
     </div>
 
     <!-- ── Table ────────────────────────────────────────────────── -->
@@ -68,6 +68,8 @@ const STATUSES = ['', 'Pending', 'InProgress', 'NeedsReview', 'Done', 'Skipped',
 })
 export class MethodListComponent implements OnInit {
   private api = inject(ApiService);
+  private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   methods: MethodSummaryDto[] = [];
   total = 0;
@@ -77,7 +79,14 @@ export class MethodListComponent implements OnInit {
   filterName = '';
   statuses = STATUSES.slice(1);
 
-  ngOnInit() { this.load(); }
+  ngOnInit() {
+    this.route.queryParams.subscribe(params => {
+      this.filterName   = params['q']      ?? '';
+      this.filterStatus = params['status'] ?? '';
+      this.page         = params['page']   ? +params['page'] - 1 : 0;
+      this.load();
+    });
+  }
 
   load() {
     const params: Record<string, any> = { page: this.page + 1, pageSize: this.pageSize };
@@ -86,6 +95,19 @@ export class MethodListComponent implements OnInit {
     this.api.getMethods(params).subscribe(r => { this.methods = r.items; this.total = r.totalCount; });
   }
 
-  prev() { this.page--; this.load(); }
-  next() { this.page++; this.load(); }
+  apply() {
+    this.page = 0;
+    this.syncUrl();
+  }
+
+  prev() { this.page--; this.syncUrl(); }
+  next() { this.page++; this.syncUrl(); }
+
+  private syncUrl() {
+    const qp: Record<string, any> = {};
+    if (this.filterName)   qp['q']      = this.filterName;
+    if (this.filterStatus) qp['status'] = this.filterStatus;
+    if (this.page > 0)     qp['page']   = this.page + 1;
+    this.router.navigate(['/methods'], { queryParams: qp });
+  }
 }
