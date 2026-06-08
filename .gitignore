@@ -1,0 +1,11 @@
+.env
+data/
+bin/
+obj/
+*.user
+.vs/
+node_modules/
+dist/
+.angular/
+*.db-shm
+*.db-wal
