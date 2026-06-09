@@ -167,11 +167,11 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; line-height: 1.25; }
   border-radius: 2em;
   white-space: nowrap;
 
-  &.Label--pending     { color: var(--status-pending);     border-color: var(--status-pending); }
+  &.Label--pending     { color: var(--status-pending);     border-color: var(--color-border-muted); }
   &.Label--inprogress  { color: var(--status-inprogress);  border-color: var(--status-inprogress); }
   &.Label--needsreview { color: var(--status-needsreview); border-color: var(--status-needsreview); }
-  &.Label--done        { color: var(--status-done);        border-color: var(--status-done); }
-  &.Label--skipped     { color: var(--status-skipped);     border-color: var(--status-skipped); }
+  &.Label--done        { color: #fff; background-color: var(--status-done); border-color: var(--status-done); }
+  &.Label--skipped     { color: var(--status-skipped);     border-color: var(--color-border-muted); }
   &.Label--deferred    { color: var(--status-deferred);    border-color: var(--status-deferred); }
 }
 
