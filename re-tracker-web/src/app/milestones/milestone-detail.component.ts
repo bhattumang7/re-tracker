@@ -11,6 +11,9 @@ import { StatusBadgeComponent } from '../shared/status-badge.component';
   template: `
     <div class="page-header">
       <h2 class="f3">{{ milestone?.name ?? '…' }}</h2>
+      @if (milestone && isComplete) {
+        <span class="Label Label--done ml-2" style="vertical-align:middle">✓ Completed</span>
+      }
       <button class="btn btn-sm" (click)="loadNext()">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
           <path d="M8.75.75a.75.75 0 0 0-1.5 0V5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0V6.5h4.5a.75.75 0 0 0 0-1.5H8.75Z"/>
@@ -100,6 +103,11 @@ export class MilestoneDetailComponent implements OnInit {
   methods: MethodSummaryDto[] = [];
   tree: CallTreeNodeDto[] = [];
   next: MethodSummaryDto | null = null;
+
+  get isComplete(): boolean {
+    return !!this.milestone && this.milestone.totalMethods > 0
+      && this.milestone.doneMethods === this.milestone.totalMethods;
+  }
 
   get statusEntries(): [string, number][] {
     return Object.entries(this.milestone?.byStatus ?? {});
