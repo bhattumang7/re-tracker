@@ -19,6 +19,14 @@ public class MethodsController(IMethodService svc) : ControllerBase
         [FromQuery] int pageSize = 50)
         => Ok(await svc.ListAsync(status, fileId, classId, nameContains, page, pageSize));
 
+    // Project-wide (or global, if projectId omitted) next-to-port recommendation.
+    [HttpGet("next")]
+    public async Task<IActionResult> Next([FromQuery] int? projectId)
+    {
+        var result = await svc.GetNextAsync(projectId);
+        return result is null ? NoContent() : Ok(result);
+    }
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Detail(int id)
     {

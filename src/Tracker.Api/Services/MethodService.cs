@@ -9,6 +9,33 @@ namespace Tracker.Api.Services;
 
 public class MethodService(TrackerDbContext db) : IMethodService
 {
+    private static readonly MigrationStatus[] Terminal =
+        [MigrationStatus.Done, MigrationStatus.Skipped, MigrationStatus.NeedsReview];
+
+    // Project-wide (or global) "what to port next": the non-terminal method with
+    // the fewest unresolved internal callees (a topological leaf), id as tie-break.
+    // Mirrors the milestone-scoped GetNextAsync and the CLI `next` heuristic.
+    public async Task<MethodDetailDto?> GetNextAsync(int? projectId)
+    {
+        var q = db.Methods.Where(m => m.RemovedAt == null && !Terminal.Contains(m.Status));
+        if (projectId.HasValue) q = q.Where(m => m.File.ProjectId == projectId.Value);
+
+        var best = await q
+            .Select(m => new
+            {
+                m.Id,
+                Unresolved = m.CallsAsCaller.Count(c =>
+                    c.CalleeMethodId != null
+                    && c.CalleeMethod!.RemovedAt == null
+                    && !Terminal.Contains(c.CalleeMethod.Status))
+            })
+            .OrderBy(x => x.Unresolved)
+            .ThenBy(x => x.Id)
+            .FirstOrDefaultAsync();
+
+        return best is null ? null : await GetDetailAsync(best.Id);
+    }
+
     public async Task<PagedResult<MethodSummaryDto>> ListAsync(
         MigrationStatus? status, int? fileId, int? classId, string? nameContains, int page, int pageSize)
     {
