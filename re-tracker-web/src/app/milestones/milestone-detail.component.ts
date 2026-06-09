@@ -27,9 +27,9 @@ import { StatusBadgeComponent } from '../shared/status-badge.component';
     @if (milestone) {
       <div class="Box mb-4">
         <div class="Box-row d-flex gap-3" style="flex-wrap:wrap; align-items:center">
-          <span><strong class="f4">{{ milestone.totalMethods }}</strong> <span class="text-muted">functions</span></span>
-          <span><strong class="f4">{{ milestone.doneMethods }}</strong> <span class="text-muted">done</span></span>
-          <span><strong class="f4">{{ milestone.progress }}%</strong> <span class="text-muted">complete</span></span>
+          <span class="d-flex align-items-baseline gap-1"><strong class="f4">{{ milestone.totalMethods }}</strong> <span class="text-muted">functions</span></span>
+          <span class="d-flex align-items-baseline gap-1"><strong class="f4">{{ milestone.doneMethods }}</strong> <span class="text-muted">done</span></span>
+          <span class="d-flex align-items-baseline gap-1"><strong class="f4">{{ milestone.progress }}%</strong> <span class="text-muted">complete</span></span>
           <span class="d-flex gap-2 ml-auto" style="flex-wrap:wrap">
             @for (s of statusEntries; track s[0]) {
               <span class="Label">{{ s[0] }}: {{ s[1] }}</span>
