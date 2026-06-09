@@ -13,6 +13,9 @@ public interface IMilestoneService
     Task<MethodDetailDto?> GetNextAsync(int id);
     Task<GraphDto> GetGraphAsync(int id);
     Task<MilestoneDto> CreateAsync(string name, string? description, int projectId, int? parentId, int sortOrder);
+    Task<MilestoneDto?> UpdateAsync(int id, string? name, string? description, int? sortOrder);
+    Task<MilestoneDto?> ReparentAsync(int id, int? newParentId);
+    Task<bool> DeleteAsync(int id);
     Task<bool> AddMethodAsync(int milestoneId, int methodId);
     Task<int> ScopeToRootAsync(int milestoneId, int rootMethodId);
     Task<List<CallTreeNodeDto>> GetCallTreeAsync(int milestoneId);

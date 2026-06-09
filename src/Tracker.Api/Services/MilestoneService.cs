@@ -16,7 +16,15 @@ public class MilestoneService(TrackerDbContext db) : IMilestoneService
     {
         var q = db.Milestones.Include(m => m.MilestoneMethods).ThenInclude(mm => mm.Method).AsQueryable();
         if (projectId.HasValue) q = q.Where(m => m.ProjectId == projectId.Value);
-        return (await q.OrderBy(m => m.SortOrder).ToListAsync()).Select(ToDto).ToList();
+        var list = await q.OrderBy(m => m.SortOrder).ToListAsync();
+        var direct = list.ToDictionary(m => m.Id, ToDto);
+        var childrenOf = ChildrenMap(list);
+        // Roll child totals up into parents so grouping milestones report real progress.
+        return list.Select(m =>
+        {
+            var (t, dn) = Rollup(m.Id, direct, childrenOf);
+            return direct[m.Id] with { TotalMethods = t, DoneMethods = dn, Progress = Pct(dn, t) };
+        }).ToList();
     }
 
     public async Task<List<MilestoneTreeDto>> GetTreeAsync(int? projectId)
@@ -49,7 +57,15 @@ public class MilestoneService(TrackerDbContext db) : IMilestoneService
         var m = await db.Milestones
             .Include(m => m.MilestoneMethods).ThenInclude(mm => mm.Method)
             .FirstOrDefaultAsync(m => m.Id == id);
-        return m is null ? null : ToDto(m);
+        if (m is null) return null;
+        // Roll descendant totals up so a grouping milestone's detail reflects its subtree.
+        var siblings = await db.Milestones
+            .Include(x => x.MilestoneMethods).ThenInclude(mm => mm.Method)
+            .Where(x => x.ProjectId == m.ProjectId)
+            .ToListAsync();
+        var direct = siblings.ToDictionary(x => x.Id, ToDto);
+        var (t, dn) = Rollup(id, direct, ChildrenMap(siblings));
+        return direct[id] with { TotalMethods = t, DoneMethods = dn, Progress = Pct(dn, t) };
     }
 
     public async Task<PagedResult<MethodSummaryDto>> GetMethodsAsync(int id, MigrationStatus? status, int page, int pageSize)
@@ -143,6 +159,59 @@ public class MilestoneService(TrackerDbContext db) : IMilestoneService
         db.Milestones.Add(ms);
         await db.SaveChangesAsync();
         return ToDto(ms);
+    }
+
+    public async Task<MilestoneDto?> UpdateAsync(int id, string? name, string? description, int? sortOrder)
+    {
+        var m = await db.Milestones.FirstOrDefaultAsync(x => x.Id == id);
+        if (m is null) return null;
+        if (name is not null) m.Name = name;
+        if (description is not null) m.Description = description;
+        if (sortOrder.HasValue) m.SortOrder = sortOrder.Value;
+        await db.SaveChangesAsync();
+        return await GetAsync(id);
+    }
+
+    public async Task<MilestoneDto?> ReparentAsync(int id, int? newParentId)
+    {
+        var m = await db.Milestones.FirstOrDefaultAsync(x => x.Id == id);
+        if (m is null) return null;
+        if (newParentId.HasValue)
+        {
+            if (newParentId.Value == id)
+                throw new InvalidOperationException("A milestone cannot be its own parent.");
+            var rel = await db.Milestones
+                .Where(x => x.ProjectId == m.ProjectId)
+                .Select(x => new { x.Id, x.ParentId })
+                .ToListAsync();
+            var parentOf = rel.ToDictionary(x => x.Id, x => x.ParentId);
+            if (!parentOf.ContainsKey(newParentId.Value))
+                throw new InvalidOperationException("Parent milestone not found.");
+            // Walk up from the proposed parent; reaching id means this would form a cycle.
+            int? cur = newParentId;
+            while (cur.HasValue)
+            {
+                if (cur.Value == id)
+                    throw new InvalidOperationException("Reparenting would create a cycle.");
+                cur = parentOf.TryGetValue(cur.Value, out var p) ? p : null;
+            }
+        }
+        m.ParentId = newParentId;
+        await db.SaveChangesAsync();
+        return await GetAsync(id);
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var m = await db.Milestones.FirstOrDefaultAsync(x => x.Id == id);
+        if (m is null) return false;
+        // Promote children to this milestone's parent so the subtree isn't orphaned.
+        var children = await db.Milestones.Where(x => x.ParentId == id).ToListAsync();
+        foreach (var c in children) c.ParentId = m.ParentId;
+        await db.MilestoneMethods.Where(mm => mm.MilestoneId == id).ExecuteDeleteAsync();
+        db.Milestones.Remove(m);
+        await db.SaveChangesAsync();
+        return true;
     }
 
     public async Task<bool> AddMethodAsync(int milestoneId, int methodId)
@@ -297,10 +366,37 @@ public class MilestoneService(TrackerDbContext db) : IMilestoneService
             {
                 var dto  = ToDto(m);
                 var children = BuildTree(all, m.Id);
+                // Children are already rolled up recursively; fold them into this node.
+                int total = dto.TotalMethods + children.Sum(c => c.TotalMethods);
+                int done  = dto.DoneMethods  + children.Sum(c => c.DoneMethods);
                 return new MilestoneTreeDto(dto.Id, dto.ParentId, dto.Name, dto.Description,
-                    dto.TotalMethods, dto.DoneMethods, dto.Progress, children);
+                    total, done, Pct(done, total), children);
             })
             .ToList();
+    }
+
+    private static double Pct(int done, int total) =>
+        total > 0 ? Math.Round((double)done / total * 100, 1) : 0;
+
+    private static Dictionary<int, List<int>> ChildrenMap(IEnumerable<Milestone> all) =>
+        all.Where(m => m.ParentId.HasValue)
+           .GroupBy(m => m.ParentId!.Value)
+           .ToDictionary(g => g.Key, g => g.Select(x => x.Id).ToList());
+
+    // Direct totals of id plus all descendants (recursive).
+    private static (int total, int done) Rollup(int id,
+        Dictionary<int, MilestoneDto> direct, Dictionary<int, List<int>> childrenOf)
+    {
+        var d = direct[id];
+        int total = d.TotalMethods, done = d.DoneMethods;
+        if (childrenOf.TryGetValue(id, out var kids))
+            foreach (var k in kids)
+            {
+                var (ct, cd) = Rollup(k, direct, childrenOf);
+                total += ct;
+                done  += cd;
+            }
+        return (total, done);
     }
 
     private async Task<List<Milestone>> LoadDescendantsAsync(int projectId, int rootId)

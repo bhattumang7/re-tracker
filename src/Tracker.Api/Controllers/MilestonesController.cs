@@ -59,6 +59,32 @@ public class MilestonesController(IMilestoneService svc) : ControllerBase
         return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
     }
 
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateMilestoneRequest req)
+    {
+        var result = await svc.UpdateAsync(id, req.Name, req.Description, req.SortOrder);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    // Move a milestone under a new parent (null = make it a top-level root).
+    [HttpPut("{id:int}/parent")]
+    public async Task<IActionResult> Reparent(int id, [FromBody] ReparentRequest req)
+    {
+        try
+        {
+            var result = await svc.ReparentAsync(id, req.ParentId);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+        => await svc.DeleteAsync(id) ? NoContent() : NotFound();
+
     [HttpPost("{id:int}/methods/{methodId:int}")]
     public async Task<IActionResult> AddMethod(int id, int methodId)
     {
@@ -74,3 +100,5 @@ public class MilestonesController(IMilestoneService svc) : ControllerBase
 }
 
 public record CreateMilestoneRequest(string Name, string? Description, int ProjectId, int? ParentId, int SortOrder = 0);
+public record UpdateMilestoneRequest(string? Name, string? Description, int? SortOrder);
+public record ReparentRequest(int? ParentId);
